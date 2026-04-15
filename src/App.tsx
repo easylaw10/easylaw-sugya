@@ -18,6 +18,7 @@ export default function App() {
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(false)
   const [streaming, setStreaming] = useState(false)
+  const [aiStatus, setAiStatus] = useState<string | null>(null)
   const [limitReached, setLimitReached] = useState(() => getMessageCount() >= MAX_MESSAGES)
   const [historyOpen, setHistoryOpen] = useState(false)
   const [conversations, setConversations] = useState<Conversation[]>(() => getConversations())
@@ -88,6 +89,7 @@ export default function App() {
             )
           )
         },
+        setAiStatus,
       )
 
       apiMessages.current.push({
@@ -116,6 +118,7 @@ export default function App() {
     }
     setLoading(false)
     setStreaming(false)
+    setAiStatus(null)
 
     if (getMessageCount() >= MAX_MESSAGES) {
       setLimitReached(true)
@@ -128,6 +131,7 @@ export default function App() {
     apiMessages.current = []
     setLoading(false)
     setStreaming(false)
+    setAiStatus(null)
   }
 
   const handleSelectConversation = (id: string) => {
@@ -178,7 +182,7 @@ export default function App() {
               {messages.map((msg) => (
                 <ChatMessage key={msg.id} message={msg} />
               ))}
-              {loading && <TypingIndicator />}
+              {(loading || aiStatus) && <TypingIndicator status={aiStatus} />}
               {limitReached && <LimitReached />}
             </div>
           )}

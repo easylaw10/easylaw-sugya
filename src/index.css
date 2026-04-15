@@ -45,6 +45,14 @@
   color: transparent;
 }
 
+/* ── thinking spinner ────────────────────── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.thinking-spinner {
+  animation: spin .7s linear infinite;
+}
+
 /* ── animations ──────────────────────────── */
 @keyframes msg-in {
   from { opacity: 0; transform: translateY(6px); }

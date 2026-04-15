@@ -6,9 +6,18 @@ const CHAT_URL = 'https://gtllahbwtojfvuxefwcx.supabase.co/functions/v1/chat'
  * Send messages to the Supabase Edge Function and parse the SSE stream.
  * Calls onChunk with each text delta for live streaming in the UI.
  */
+/** Map SSE tool events to Hebrew status labels */
+function toolLabel(name: string): string {
+  if (name.includes('search_court') || name.includes('law')) return 'מחפש פסיקה...'
+  if (name.includes('legislation') || name.includes('section')) return 'מחפש חקיקה...'
+  if (name.includes('web_search')) return 'מחפש באינטרנט...'
+  return 'מעבד...'
+}
+
 export async function sendMessageStream(
   messages: ApiMessage[],
   onChunk: (text: string) => void,
+  onStatus?: (status: string | null) => void,
 ): Promise<string> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 60_000)
@@ -41,6 +50,10 @@ export async function sendMessageStream(
   const decoder = new TextDecoder()
   let fullText = ''
   let buffer = ''
+  let hasText = false
+
+  // Initial "thinking" status
+  onStatus?.('חושב...')
 
   try {
     while (true) {
@@ -60,28 +73,46 @@ export async function sendMessageStream(
         try {
           const event = JSON.parse(data)
 
+          // Tool use started — show what tool is running
+          if (event.type === 'content_block_start') {
+            const block = event.content_block
+            if (block?.type === 'tool_use' || block?.type === 'mcp_tool_use') {
+              onStatus?.(toolLabel(block.name || ''))
+            }
+            if (block?.type === 'web_search_tool_result') {
+              onStatus?.('מחפש באינטרנט...')
+            }
+          }
+
+          // Text delta — clear status, stream text
           if (event.type === 'content_block_delta' && event.delta?.type === 'text_delta') {
+            if (!hasText) {
+              hasText = true
+              onStatus?.(null) // clear status once text flows
+            }
             fullText += event.delta.text
             onChunk(fullText)
           }
 
+          // Non-streaming fallback
           if (event.type === 'message' && event.content) {
+            onStatus?.(null)
             const textBlocks = event.content.filter((b: { type: string }) => b.type === 'text')
             fullText = textBlocks.map((b: { text: string }) => b.text).join('\n')
             onChunk(fullText)
           }
 
-          // Handle streaming errors from the API
           if (event.type === 'error') {
             throw new Error(event.error?.message || 'API stream error')
           }
         } catch (e) {
-          if (e instanceof SyntaxError) continue // skip non-JSON
+          if (e instanceof SyntaxError) continue
           throw e
         }
       }
     }
   } finally {
+    onStatus?.(null)
     reader.releaseLock()
   }
 
